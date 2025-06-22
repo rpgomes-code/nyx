@@ -18,6 +18,12 @@ export const createTRPCContext = cache(async () => {
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>;
 
+// Protected context type where user is guaranteed to exist
+type ProtectedContext = Context & {
+    user: NonNullable<Context['user']>;
+    session: NonNullable<Context['session']>;
+};
+
 // Initialize tRPC without superjson for now to avoid conflicts
 const t = initTRPC.context<Context>().create({
     errorFormatter({ shape, error }) {
@@ -41,11 +47,13 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     if (!ctx.session || !ctx.user) {
         throw new TRPCError({ code: 'UNAUTHORIZED' });
     }
+
     return next({
         ctx: {
             ...ctx,
-            session: { ...ctx.session, user: ctx.user },
-        },
+            user: ctx.user, // TypeScript now knows this is non-null
+            session: ctx.session, // TypeScript now knows this is non-null
+        } as ProtectedContext,
     });
 });
 

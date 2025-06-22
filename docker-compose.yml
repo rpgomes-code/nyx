@@ -1,0 +1,98 @@
+﻿services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: nyx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nyx_user
+      POSTGRES_PASSWORD: nyx_password
+      POSTGRES_DB: nyx_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - nyx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nyx_user -d nyx_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nyx-app
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgresql://nyx_user:nyx_password@postgres:5432/nyx_db
+
+      # App Configuration
+      NODE_ENV: production
+      BASE_URL: http://localhost:3000
+
+      # Auth Providers (you'll need to add your actual values)
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID}
+      APPLE_CLIENT_SECRET: ${APPLE_CLIENT_SECRET}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+
+      # Add other environment variables as needed
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-your-secret-key-change-this}
+
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nyx-network
+    volumes:
+      # Mount for development (optional, remove for production)
+      - ./uploads:/app/uploads
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        npx prisma migrate deploy &&
+        npx prisma generate &&
+        node server.js
+      "
+
+  # Redis (optional, for caching/sessions)
+  redis:
+    image: redis:7-alpine
+    container_name: nyx-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - nyx-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Networks
+networks:
+  nyx-network:
+    driver: bridge
+
+# Volumes
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
