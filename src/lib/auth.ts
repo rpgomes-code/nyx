@@ -7,10 +7,13 @@ import { Resend } from "resend";
 const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 const prisma = new PrismaClient();
+
 export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
+    secret: process.env.BETTER_AUTH_SECRET,
+    baseURL: process.env.BETTER_AUTH_URL || process.env.BASE_URL || "http://localhost:3000",
     emailAndPassword: {
         enabled: true,
         requireEmailVerification: true,
@@ -20,12 +23,12 @@ export const auth = betterAuth({
         autoSignInAfterVerification: true,
         sendVerificationEmail: async ({ user, url }) => {
             await resend.emails.send({
-                from: `Nyx <${process.env.RESEND_EMAIL}>`, // Must be a verified domain
+                from: `Nyx <${process.env.RESEND_EMAIL}>`,
                 to: user.email,
                 subject: "Verify your email address",
                 html: `
           <!DOCTYPE html>
-          <html>
+          <html lang="en">
             <head>
               <meta charset="utf-8">
               <title>Verify your email</title>
@@ -86,8 +89,6 @@ export const auth = betterAuth({
         `,
             });
         },
-    },
-    forgetPassword: {
     },
     socialProviders: {
         github: {
